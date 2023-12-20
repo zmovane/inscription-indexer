@@ -16,15 +16,15 @@ COPY . .
 # Build our project
 RUN apt-get update -y \
     && apt-get install protobuf-compiler -y
-RUN cargo build --release --bin indexer
+RUN cargo build --release --bin inscription
 
 FROM debian:bullseye-slim AS runtime
 ARG CHAIN 
-WORKDIR /app/indexer-$CHAIN
+WORKDIR /app/inscription-$CHAIN
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/indexer indexer
+COPY --from=builder /app/target/release/inscription inscription

@@ -1,15 +1,15 @@
-version: '3.9'
+version: "3.9"
 networks:
-  indexer-net:
+  inscription-net:
     driver: bridge
 services:
-  indexer:
+  inscription:
     restart: always
-    working_dir: /app/indexer-${CHAIN}
+    working_dir: /app/inscription-${CHAIN}
     environment:
       - CHAIN=${CHAIN}
       - RPC_URL=${RPC_URL}
-    image: indexer-${CHAIN}:v1
-    command: ./indexer-${CHAIN}
+    image: inscription-${CHAIN}:v1
+    command: ./inscription-${CHAIN}
     networks:
-     - indexer-net
+      - inscription-net
