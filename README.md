@@ -24,13 +24,15 @@ The data input is in hexadecimal string format and a self-transaction sent by a 
 ### How does inscription indexing work
 Inscription need to be deployed first before users can start minting. Therefore, the indexer needs to be built from the first deploy, and the mint indexing ends when max supply is reached.
 
-### DB migration
+### Usage
+
+#### DB migration
 
 ```
 cargo run --bin prisma -- migrate dev
 ```
 
-### Running indexer
+#### Running Indexer
 
 ```
 RUST_LOG=info cargo run --bin inscription
