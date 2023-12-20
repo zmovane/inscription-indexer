@@ -11,58 +11,46 @@ generator client {
 }
 
 enum Chain {
-    ETHEREUM_GOERLI
-    POLYGON_MUMBAI
-    OPBNB_TESTNET
-    BNBCHAIN_TESTNET
-    ZKSYNC_ERA_TESTNET
-}
-
-enum Standard {
-    ERC721
-    ERC1155
+    ETHEREUM_MAINNET
+    BNBCHAIN_MAINNET
+    OPBNB_MAINNET
 }
 
 enum IndexedType {
-    LOG
-    TOKEN
+    OrdinalsTextPlain
 }
 
-model Logs {
-    id           String   @id @default(dbgenerated("(gen_random_uuid())")) @db.VarChar(36)
-    tx_hash      String   @db.VarChar(66)
-    block_number BigInt   @db.BigInt
-    log_index    BigInt   @db.BigInt
-    topics       String[] @default([])
-    address      String   @db.VarChar(66)
-    data         Bytes
+model Inscription {
+    id        String     @id
+    chain     Chain
+    block     BigInt
+    deployer  String
+    p         String
+    tick      String
+    max       String
+    lim       String
+    inscribes Inscribe[]
 
-    @@unique([block_number, log_index])
-    @@index([block_number])
-    @@index([tx_hash])
+    @@unique([chain, p, tick])
+    @@map("inscriptions")
 }
 
-model States {
+model Inscribe {
+    id             String      @id
+    inscription    Inscription @relation(fields: [inscription_id], references: [id])
+    inscription_id String
+    block          BigInt
+    amt            String
+
+    @@map("inscribes")
+}
+
+model IndexedBlock {
     chain         Chain
     indexed_type  IndexedType
     indexed_block BigInt
+    indexed_txi   BigInt
 
     @@unique([chain, indexed_type])
-}
-
-model Tokens {
-    id            String   @id @default(dbgenerated("(gen_random_uuid())")) @db.VarChar(36)
-    chain         Chain
-    tokenId       String   @db.VarChar(66)
-    contract      String   @db.VarChar(66)
-    owner         String   @db.VarChar(66)
-    uri           String?  @db.VarChar(200)
-    standard      Standard
-    indexed_block BigInt   @db.BigInt
-
-    @@unique([chain, tokenId, contract])
-    @@index([standard])
-    @@index([chain])
-    @@index([owner])
-    @@index([contract])
+    @@map("indexed_blocks")
 }
