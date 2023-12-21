@@ -46,7 +46,7 @@ impl Indexer {
                     .collect::<Vec<Transaction>>();
                 txs.sort_by(|x, y| x.transaction_index.cmp(&y.transaction_index));
                 for tx in txs.iter() {
-                    let (found, txi) = self.index_inscription(tx).await?;
+                    let (found, txi) = self.process_transaction(tx).await?;
                     if !found {
                         continue;
                     }
@@ -58,7 +58,7 @@ impl Indexer {
         Ok(())
     }
 
-    async fn index_inscription(
+    async fn process_transaction(
         &self,
         tx: &Transaction,
     ) -> Result<(bool, Option<i64>), anyhow::Error> {
