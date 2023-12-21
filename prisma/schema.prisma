@@ -29,6 +29,7 @@ model Inscription {
     tick      String
     max       String
     lim       String
+    minted    String     @default("0")
     inscribes Inscribe[]
 
     @@unique([chain, p, tick])
