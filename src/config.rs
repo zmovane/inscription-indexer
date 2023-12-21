@@ -16,8 +16,8 @@ lazy_static! {
 pub type ChainId = u64;
 pub type IndexedType = prisma::IndexedType;
 pub type WsProvider = Arc<Provider<Ws>>;
-pub type HttpProvder = Arc<Provider<Http>>;
-pub type HttpProviders = Vec<HttpProvder>;
+pub type HttpProvider = Arc<Provider<Http>>;
+pub type HttpProviders = Vec<HttpProvider>;
 
 pub fn read_yaml<T: DeserializeOwned>(path: &str) -> Result<T, serde_yaml::Error> {
     let content = fs::read_to_string(path).unwrap();
@@ -36,8 +36,8 @@ pub trait Random<T> {
     fn random(&self) -> Result<T, anyhow::Error>;
 }
 
-impl Random<HttpProvder> for HttpProviders {
-    fn random(&self) -> Result<HttpProvder, anyhow::Error> {
+impl Random<HttpProvider> for HttpProviders {
+    fn random(&self) -> Result<HttpProvider, anyhow::Error> {
         Ok(self.choose(&mut thread_rng()).unwrap().to_owned())
     }
 }
