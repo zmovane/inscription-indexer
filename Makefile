@@ -9,5 +9,4 @@ db/generate:
 
 db/migrate:
 	@cargo prisma migrate dev
-	@cargo fix --lib --allow-dirty --allow-staged
 	@make fix/path
