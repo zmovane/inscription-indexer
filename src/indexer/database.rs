@@ -5,6 +5,9 @@ use crate::{
 };
 use anyhow::{anyhow, Ok};
 use ethers::{types::Transaction, utils::hex::ToHex};
+use prisma_client_rust::bigdecimal::BigDecimal;
+
+pub type DBInscription = prisma::inscription::Data;
 
 pub async fn update_indexed_block(
     db: &PrismaClient,
@@ -36,7 +39,7 @@ pub async fn dump_deploy_inscription(
     db: &PrismaClient,
     tx: &Transaction,
     inp: &Inscription,
-) -> Result<(), anyhow::Error> {
+) -> Result<prisma::inscription::Data, anyhow::Error> {
     let chain = tx.chain_id.unwrap().as_chain()?;
     db.inscription()
         .upsert(
@@ -56,17 +59,36 @@ pub async fn dump_deploy_inscription(
         )
         .exec()
         .await
-        .map(|_| ())
         .map_err(|e| anyhow!(e))
 }
 
 pub async fn dump_mint_inscription(
-    client: &PrismaClient,
+    db: &PrismaClient,
     tx: &Transaction,
     inp: &Inscription,
-) -> Result<(), anyhow::Error> {
+) -> Result<DBInscription, anyhow::Error> {
     let chain = tx.chain_id.unwrap().as_chain()?;
-    client
+    let inscription = db
+        .inscription()
+        .find_unique(prisma::inscription::UniqueWhereParam::ChainPTickEquals(
+            chain,
+            inp.p.to_owned(),
+            inp.tick.to_owned(),
+        ))
+        .exec()
+        .await?;
+    if let None = inscription {
+        return Err(anyhow!("Not found deployed inscription"));
+    }
+    let inscription = inscription.unwrap();
+    let amt = inp.amt.as_ref().unwrap().parse::<BigDecimal>().unwrap();
+    let max = inscription.max.parse::<BigDecimal>().unwrap();
+    let minted = inscription.minted.parse::<BigDecimal>().unwrap();
+    let updated_minted = minted + amt;
+    if updated_minted.gt(&max) {
+        return Err(anyhow!("Max supply is reached"));
+    }
+    let _ = db
         .inscribe()
         .upsert(
             prisma::inscribe::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
@@ -85,6 +107,13 @@ pub async fn dump_mint_inscription(
         )
         .exec()
         .await
-        .map(|_| ())
+        .map_err(|e| anyhow!(e))?;
+    db.inscription()
+        .update(
+            prisma::inscription::UniqueWhereParam::IdEquals(inscription.id),
+            vec![prisma::inscription::minted::set(updated_minted.to_string())],
+        )
+        .exec()
+        .await
         .map_err(|e| anyhow!(e))
 }

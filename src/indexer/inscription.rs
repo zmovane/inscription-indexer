@@ -44,43 +44,56 @@ impl Indexer {
                     .into_iter()
                     .filter(|tx| tx.transaction_index.unwrap().as_u64() as i64 > block_txi)
                     .collect::<Vec<Transaction>>();
+                txs.sort_by(|x, y| x.transaction_index.cmp(&y.transaction_index));
                 for tx in txs.iter() {
-                    if tx.to.is_none() {
-                        let err = anyhow!("Invalid transaction {}: to is None", tx.hash);
-                        return Err(err);
-                    }
-                    if tx.to.unwrap().ne(&tx.from) {
+                    let (found, txi) = self.index_inscription(tx).await?;
+                    if !found {
                         continue;
                     }
-                    if !tx
-                        .input
-                        .to_owned()
-                        .encode_hex()
-                        .starts_with(PREFIX_INSCRIPTION_HEX)
-                    {
-                        continue;
-                    }
-                    let input = String::from_utf8(tx.input.to_vec())?;
-                    let data = input.strip_prefix(PREFIX_INSCRIPTION).unwrap_or("{}");
-                    let deserialized = serde_json::from_str::<serde_json::Value>(data);
-                    if deserialized.is_err() {
-                        continue;
-                    }
-                    let deserialized = deserialized.unwrap();
-                    if !deserialized.is_object() {
-                        continue;
-                    }
-                    if !deserialized.is_valid_inscription() {
-                        continue;
-                    }
-                    let inscription: Inscription = serde_json::from_value(deserialized)?;
-                    let (_, txi) = self.dump_inscription(tx, &inscription).await?;
-                    block_txi = txi as i64;
+                    block_txi = txi.unwrap();
                 }
             }
             (block_to_process, block_txi) = next_block(block_to_process, block_txi);
         }
         Ok(())
+    }
+
+    async fn index_inscription(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(bool, Option<i64>), anyhow::Error> {
+        let tx_without_inscription = (false, None);
+        if tx.to.is_none() {
+            let err = anyhow!("Invalid transaction {}: to is None", tx.hash);
+            return Err(err);
+        }
+        if tx.to.unwrap().ne(&tx.from) {
+            return Ok(tx_without_inscription);
+        }
+        if !tx
+            .input
+            .to_owned()
+            .encode_hex()
+            .starts_with(PREFIX_INSCRIPTION_HEX)
+        {
+            return Ok(tx_without_inscription);
+        }
+        let input = String::from_utf8(tx.input.to_vec())?;
+        let data = input.strip_prefix(PREFIX_INSCRIPTION).unwrap_or("{}");
+        let deserialized = serde_json::from_str::<serde_json::Value>(data);
+        if deserialized.is_err() {
+            return Ok(tx_without_inscription);
+        }
+        let deserialized = deserialized.unwrap();
+        if !deserialized.is_object() {
+            return Ok(tx_without_inscription);
+        }
+        if !deserialized.is_valid_inscription() {
+            return Ok(tx_without_inscription);
+        }
+        let inscription: Inscription = serde_json::from_value(deserialized)?;
+        let (_, indexed_txi) = self.dump_inscription(tx, &inscription).await?;
+        Ok((true, Some(indexed_txi)))
     }
 
     async fn dump_inscription(
@@ -92,12 +105,11 @@ impl Indexer {
             ._transaction()
             .run(|db_tx| async move {
                 let op = inp.op.as_str();
-                if op.eq(OP_DEPLOY) {
-                    dump_deploy_inscription(&db_tx, tx, inp).await?;
-                }
-                if op.eq(OP_MINT) {
-                    dump_mint_inscription(&db_tx, tx, inp).await?;
-                }
+                let _ = match op {
+                    OP_DEPLOY => dump_deploy_inscription(&db_tx, tx, inp).await?,
+                    OP_MINT => dump_mint_inscription(&db_tx, tx, inp).await?,
+                    _ => return Err(anyhow!("Invalid operations")),
+                };
                 let indexed_block = tx.block_number.unwrap().as_u64() as i64;
                 let indexed_txi = tx.transaction_index.unwrap().as_u64() as i64;
                 update_indexed_block(&db_tx, &self.chain, indexed_block, indexed_txi).await?;

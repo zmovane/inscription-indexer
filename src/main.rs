@@ -5,8 +5,10 @@ pub mod prisma;
 use config::{ChainId, IndexedType};
 use indexer::Indexer;
 use tokio::join;
+
 #[macro_use]
 extern crate lazy_static;
+
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
