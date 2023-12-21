@@ -11,7 +11,7 @@
     - "https://rpc.ankr.com/bsc"
 204:
   name: opBNBMainnet
-  wss: ""
+  wss: "wss://opbnb.publicnode.com"
   https:
     - "https://opbnb.publicnode.com"
     - "https://1rpc.io/opbnb"
