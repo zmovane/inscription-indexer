@@ -1,17 +1,20 @@
+pub mod config;
 pub mod indexer;
 pub mod prisma;
+
+use config::{ChainId, IndexedType};
 use indexer::Indexer;
 use tokio::join;
-
+#[macro_use]
+extern crate lazy_static;
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
     pretty_env_logger::init_timed();
-    let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
-    let indexer = Indexer::new(
-        prisma::Chain::BnbchainMainnet,
-        prisma::IndexedType::OrdinalsTextPlain,
-        &rpc_url,
-    )
-    .await;
+    let chain_id = std::env::var("CHAIN_ID")
+        .expect("CHAIN_ID must be set")
+        .parse::<ChainId>()
+        .unwrap();
+    let indexer = Indexer::new(chain_id, IndexedType::OrdinalsTextPlain).await;
     let _ = join!(indexer.index_inscriptions());
 }

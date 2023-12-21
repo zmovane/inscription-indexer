@@ -1,0 +1,17 @@
+1:
+  name: EthereumMainnet
+  wss: "wss://ethereum.publicnode.com"
+  https:
+    - "https://ethereum.publicnode.com"
+    - "https://rpc.ankr.com/eth"
+56:
+  name: BNBMainnet
+  wss: "wss://bsc.publicnode.com"
+  https:
+    - "https://rpc.ankr.com/bsc"
+204:
+  name: opBNBMainnet
+  wss: ""
+  https:
+    - "https://opbnb.publicnode.com"
+    - "https://1rpc.io/opbnb"

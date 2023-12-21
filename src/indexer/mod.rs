@@ -1,8 +1,16 @@
 pub mod database;
 pub mod inscription;
 
-use crate::prisma::{self, indexed_block, Chain, IndexedType};
-use ethers::providers::{Http, Provider};
+use crate::config::{ChainId, IdToChain, WsProvider, CHAINS_CONFIG};
+use crate::{
+    config::HttpProviders,
+    prisma::{
+        self,
+        indexed_block::{self},
+        Chain, IndexedType,
+    },
+};
+use ethers::providers::{Http, Provider, Ws};
 use log::error;
 use prisma::PrismaClient;
 use serde::{Deserialize, Serialize};
@@ -16,18 +24,29 @@ pub const PREFIX_INSCRIPTION_HEX: &'static str = "0x646174613a2c";
 pub struct Indexer {
     chain: Chain,
     indexed_type: IndexedType,
-    provider: Arc<Provider<Http>>,
+    wss: WsProvider,
+    https: HttpProviders,
     database: PrismaClient,
 }
 
 impl Indexer {
-    pub async fn new(chain: Chain, indexed_type: IndexedType, url: &str) -> Indexer {
-        let provider = Arc::new(Provider::<Http>::try_from(url).unwrap());
+    pub async fn new(chain_id: ChainId, indexed_type: IndexedType) -> Indexer {
+        let config = CHAINS_CONFIG.get(&chain_id).unwrap();
+        let chain = chain_id.as_chain().unwrap();
+        let https = config
+            .https
+            .iter()
+            .map(|x| Arc::new(Provider::<Http>::try_from(x).unwrap()))
+            .collect();
+        let wss = Arc::new(Provider::<Ws>::new(
+            Ws::connect(config.wss.as_str()).await.unwrap(),
+        ));
         let database = PrismaClient::_builder().build().await.unwrap();
         Indexer {
             chain,
             indexed_type,
-            provider,
+            wss,
+            https,
             database,
         }
     }

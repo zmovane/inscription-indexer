@@ -1,10 +1,10 @@
 use super::Inscription;
-use crate::prisma::{self, PrismaClient};
-use anyhow::{anyhow, Ok};
-use ethers::{
-    types::{Transaction, U256},
-    utils::hex::ToHex,
+use crate::{
+    config::IdToChain,
+    prisma::{self, PrismaClient},
 };
+use anyhow::{anyhow, Ok};
+use ethers::{types::Transaction, utils::hex::ToHex};
 
 pub async fn update_indexed_block(
     db: &PrismaClient,
@@ -87,20 +87,4 @@ pub async fn dump_mint_inscription(
         .await
         .map(|_| ())
         .map_err(|e| anyhow!(e))
-}
-
-trait IdToChain {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error>;
-}
-
-impl IdToChain for U256 {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error> {
-        let chain = match self.as_u128() {
-            1 => prisma::Chain::EthereumMainnet,
-            56 => prisma::Chain::BnbchainMainnet,
-            204 => prisma::Chain::OpbnbMainnet,
-            _ => return Err(anyhow!("Unknown chain")),
-        };
-        Ok(chain)
-    }
 }

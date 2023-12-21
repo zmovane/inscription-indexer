@@ -3,6 +3,7 @@ use super::{
     Indexer, Inscription, InscriptionFieldValidate, OP_DEPLOY, OP_MINT, PREFIX_INSCRIPTION,
     PREFIX_INSCRIPTION_HEX,
 };
+use crate::config::Random;
 use anyhow::{anyhow, Ok};
 use ethers::{
     abi::AbiEncode,
@@ -15,18 +16,25 @@ impl Indexer {
         let (indexed_block, mut block_txi): (i64, i64) =
             self.get_indexed_block(self.indexed_type).await;
         let mut block_to_process = indexed_block as u64;
-        let mut block_stream = self.provider.watch_blocks().await?;
+        let mut block_stream = self.wss.watch_blocks().await?;
         let next_block = |block, _| -> (u64, i64) { (block + 1, -1) };
         while block_stream.next().await.is_some() {
             let block_number = self
-                .provider
+                .https
+                .random()
+                .unwrap()
                 .get_block(BlockNumber::Latest)
                 .await?
                 .unwrap()
                 .number
                 .unwrap();
             if block_to_process <= block_number.as_u64() {
-                let txs = self.provider.get_block_with_txs(block_to_process).await?;
+                let txs = self
+                    .https
+                    .random()
+                    .unwrap()
+                    .get_block_with_txs(block_to_process)
+                    .await?;
                 if let None = txs {
                     (block_to_process, block_txi) = next_block(block_to_process, block_txi);
                     continue;
