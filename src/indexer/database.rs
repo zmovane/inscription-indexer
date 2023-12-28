@@ -7,7 +7,7 @@ use anyhow::{anyhow, Ok};
 use ethers::{types::Transaction, utils::hex::ToHex};
 use prisma_client_rust::bigdecimal::BigDecimal;
 
-pub type DBInscription = prisma::inscription::Data;
+pub type DBInscription = prisma::tick::Data;
 
 pub async fn update_indexed_block(
     db: &PrismaClient,
@@ -39,15 +39,16 @@ pub async fn dump_deploy_inscription(
     db: &PrismaClient,
     tx: &Transaction,
     inp: &Inscription,
-) -> Result<prisma::inscription::Data, anyhow::Error> {
+) -> Result<prisma::tick::Data, anyhow::Error> {
     let chain = tx.chain_id.unwrap().as_chain()?;
-    db.inscription()
+    let start_block = tx.block_number.unwrap().as_u64() as i64;
+    db.tick()
         .upsert(
-            prisma::inscription::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
-            prisma::inscription::create(
+            prisma::tick::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
+            prisma::tick::create(
                 tx.hash.encode_hex(),
                 chain,
-                tx.block_number.unwrap().as_u64() as i64,
+                start_block,
                 tx.from.encode_hex(),
                 inp.p.to_owned(),
                 inp.tick.to_owned(),
@@ -55,7 +56,7 @@ pub async fn dump_deploy_inscription(
                 inp.lim.to_owned().unwrap(),
                 vec![],
             ),
-            vec![],
+            vec![prisma::tick::start_block::set(start_block)],
         )
         .exec()
         .await
@@ -68,9 +69,10 @@ pub async fn dump_mint_inscription(
     inp: &Inscription,
 ) -> Result<DBInscription, anyhow::Error> {
     let chain = tx.chain_id.unwrap().as_chain()?;
+    let blockno = tx.block_number.unwrap().as_u64() as i64;
     let inscription = db
-        .inscription()
-        .find_unique(prisma::inscription::UniqueWhereParam::ChainPTickEquals(
+        .tick()
+        .find_unique(prisma::tick::UniqueWhereParam::ChainPTickEquals(
             chain,
             inp.p.to_owned(),
             inp.tick.to_owned(),
@@ -94,12 +96,12 @@ pub async fn dump_mint_inscription(
             prisma::inscribe::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
             prisma::inscribe::create(
                 tx.hash.encode_hex(),
-                prisma::inscription::UniqueWhereParam::ChainPTickEquals(
+                prisma::tick::UniqueWhereParam::ChainPTickEquals(
                     chain,
                     inp.p.to_owned(),
                     inp.tick.to_owned(),
                 ),
-                tx.block_number.unwrap().as_u64() as i64,
+                blockno,
                 inp.amt.to_owned().unwrap(),
                 vec![],
             ),
@@ -108,10 +110,15 @@ pub async fn dump_mint_inscription(
         .exec()
         .await
         .map_err(|e| anyhow!(e))?;
-    db.inscription()
+    let mut updates: Vec<prisma::tick::SetParam> =
+        vec![prisma::tick::minted::set(updated_minted.to_string())];
+    if updated_minted.eq(&max) {
+        updates.push(prisma::tick::end_block::set(Some(blockno)));
+    }
+    db.tick()
         .update(
-            prisma::inscription::UniqueWhereParam::IdEquals(inscription.id),
-            vec![prisma::inscription::minted::set(updated_minted.to_string())],
+            prisma::tick::UniqueWhereParam::IdEquals(inscription.id),
+            updates,
         )
         .exec()
         .await
