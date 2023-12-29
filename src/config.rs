@@ -14,7 +14,6 @@ lazy_static! {
 }
 
 pub type ChainId = u64;
-pub type IndexedType = prisma::IndexedType;
 pub type WsProvider = Arc<Provider<Ws>>;
 pub type HttpProvider = Arc<Provider<Http>>;
 pub type HttpProviders = Vec<HttpProvider>;

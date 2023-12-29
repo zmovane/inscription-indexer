@@ -24,3 +24,9 @@ regex = "1.9.1"
 serde_yaml = "0.9.28"
 lazy_static = "1.4.0"
 dotenv = "0.15.0"
+tempfile = "3.9.0"
+bigdecimal = "0.4.2"
+
+[dependencies.rocksdb]
+default-features = false
+features = ["lz4"]

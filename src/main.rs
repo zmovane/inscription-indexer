@@ -2,8 +2,8 @@ pub mod config;
 pub mod indexer;
 pub mod prisma;
 
-use config::{ChainId, IndexedType};
-use indexer::Indexer;
+use config::ChainId;
+use indexer::{IndexedType, Indexer};
 use tokio::join;
 
 #[macro_use]
@@ -17,6 +17,6 @@ async fn main() {
         .expect("CHAIN_ID must be set")
         .parse::<ChainId>()
         .unwrap();
-    let indexer = Indexer::new(chain_id, IndexedType::OrdinalsTextPlain).await;
+    let indexer = Indexer::new(chain_id, IndexedType::TextPlain).await;
     let _ = join!(indexer.index_inscriptions());
 }

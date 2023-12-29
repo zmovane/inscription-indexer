@@ -1,5 +1,5 @@
 use super::{
-    database::{dump_deploy_inscription, dump_mint_inscription, update_indexed_block},
+    database::{process_deploy, process_mint},
     Indexer, Inscription, InscriptionFieldValidate, OP_DEPLOY, OP_MINT, PREFIX_INSCRIPTION,
     PREFIX_INSCRIPTION_HEX,
 };
@@ -13,8 +13,8 @@ use ethers::{
 
 impl Indexer {
     pub async fn index_inscriptions(&self) -> Result<(), anyhow::Error> {
-        let (indexed_block, mut block_txi): (i64, i64) =
-            self.get_indexed_block(self.indexed_type).await;
+        let (indexed_block, mut block_txi): (u64, i64) =
+            self.get_indexed_block(self.indexed_type.to_owned()).await;
         let mut block_to_process = indexed_block as u64;
         let mut block_stream = self.wss.watch_blocks().await?;
         let next_block = |block, _| -> (u64, i64) { (block + 1, -1) };
@@ -92,29 +92,23 @@ impl Indexer {
             return Ok(tx_without_inscription);
         }
         let inscription: Inscription = serde_json::from_value(deserialized)?;
-        let (_, indexed_txi) = self.dump_inscription(tx, &inscription).await?;
+        let (_, indexed_txi) = self.process_inscription(tx, &inscription).await?;
         Ok((true, Some(indexed_txi)))
     }
 
-    async fn dump_inscription(
+    async fn process_inscription(
         &self,
         tx: &Transaction,
         inp: &Inscription,
-    ) -> Result<(i64, i64), anyhow::Error> {
-        self.database
-            ._transaction()
-            .run(|db_tx| async move {
-                let op = inp.op.as_str();
-                let _ = match op {
-                    OP_DEPLOY => dump_deploy_inscription(&db_tx, tx, inp).await?,
-                    OP_MINT => dump_mint_inscription(&db_tx, tx, inp).await?,
-                    _ => return Err(anyhow!("Invalid operations")),
-                };
-                let indexed_block = tx.block_number.unwrap().as_u64() as i64;
-                let indexed_txi = tx.transaction_index.unwrap().as_u64() as i64;
-                update_indexed_block(&db_tx, &self.chain, indexed_block, indexed_txi).await?;
-                Ok((indexed_block, indexed_txi))
-            })
-            .await
+    ) -> Result<(u64, i64), anyhow::Error> {
+        let op = inp.op.as_str();
+        let _ = match op {
+            OP_MINT => process_mint(self.db.to_owned(), tx, inp).await?,
+            OP_DEPLOY => process_deploy(self.db.to_owned(), tx, inp).await?,
+            _ => return Err(anyhow!("Invalid operations")),
+        };
+        let indexed_block = tx.block_number.unwrap().as_u64() as u64;
+        let indexed_txi = tx.transaction_index.unwrap().as_u64() as i64;
+        Ok((indexed_block, indexed_txi))
     }
 }
