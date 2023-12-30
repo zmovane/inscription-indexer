@@ -26,6 +26,7 @@ lazy_static = "1.4.0"
 dotenv = "0.15.0"
 tempfile = "3.9.0"
 bigdecimal = "0.4.2"
+async-trait = "0.1.75"
 
 [dependencies.rocksdb]
 default-features = false
