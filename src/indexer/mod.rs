@@ -24,6 +24,13 @@ lazy_static! {
         .unwrap();
 }
 
+pub struct Filter {
+    is_self_transaction: bool,
+    recipient: Option<String>,
+    p: Option<String>,
+    tick: Option<String>,
+}
+
 pub struct Indexer {
     chain_id: ChainId,
     indexed_type: IndexedType,
