@@ -37,10 +37,11 @@ pub struct Indexer {
     wss: WsProvider,
     https: HttpProviders,
     db: Arc<Mutex<TransactionDB>>,
+    filter: Option<Filter>
 }
 
 impl Indexer {
-    pub async fn new(chain_id: ChainId, indexed_type: IndexedType) -> Indexer {
+    pub async fn new(chain_id: ChainId, indexed_type: IndexedType, filter: Option<Filter>) -> Indexer {
         let config = CHAINS_CONFIG.get(&chain_id).unwrap();
         let https = config
             .https
@@ -62,6 +63,7 @@ impl Indexer {
             wss,
             https,
             db,
+            filter
         }
     }
     pub async fn get_indexed_block(&self, indexed_type: IndexedType) -> (u64, i64) {

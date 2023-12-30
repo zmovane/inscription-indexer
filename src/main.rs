@@ -17,6 +17,6 @@ async fn main() {
         .expect("CHAIN_ID must be set")
         .parse::<ChainId>()
         .unwrap();
-    let indexer = Indexer::new(chain_id, IndexedType::TextPlain).await;
+    let indexer = Indexer::new(chain_id, IndexedType::TextPlain, None).await;
     let _ = join!(indexer.index_inscriptions());
 }
