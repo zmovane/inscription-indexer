@@ -1,14 +1,18 @@
 pub mod database;
 pub mod inscription;
+pub mod keys;
 
-use crate::config::HttpProviders;
 use crate::config::{ChainId, WsProvider, CHAINS_CONFIG};
-use ethers::providers::{Http, Provider, Ws};
+use crate::config::{HttpProviders, Random};
+use ethers::providers::{Http, Middleware, Provider, Ws};
+use ethers::types::{BlockNumber, H160};
 use log::error;
 use rocksdb::{Options, TransactionDB, TransactionDBOptions, DB};
 use serde::{Deserialize, Serialize};
 use std::{process, sync::Arc};
 use tokio::sync::Mutex;
+
+use self::keys::Keys;
 
 pub const OP_MINT: &'static str = "mint";
 pub const OP_DEPLOY: &'static str = "deploy";
@@ -17,18 +21,26 @@ pub const PREFIX_INSCRIPTION_HEX: &'static str = "0x646174613a2c";
 pub const DEFAULT_DB_PATH: &'static str = "./database";
 pub const DEFAULT_START_TXI: i64 = -1;
 
-lazy_static! {
-    pub static ref DEFAULT_START_BLOCK: u64 = std::env::var("DEFAULT_START_BLOCK")
-        .unwrap()
-        .parse::<u64>()
-        .unwrap();
-}
-
 pub struct Filter {
     is_self_transaction: bool,
-    recipient: Option<String>,
+    recipient: Option<H160>,
+    start_block: Option<u64>,
+    end_block: Option<u64>,
     p: Option<String>,
     tick: Option<String>,
+}
+
+impl Filter {
+    pub fn default() -> Self {
+        Filter {
+            is_self_transaction: true,
+            recipient: None,
+            start_block: None,
+            end_block: None,
+            p: None,
+            tick: None,
+        }
+    }
 }
 
 pub struct Indexer {
@@ -37,11 +49,11 @@ pub struct Indexer {
     wss: WsProvider,
     https: HttpProviders,
     db: Arc<Mutex<TransactionDB>>,
-    filter: Option<Filter>
+    filter: Filter,
 }
 
 impl Indexer {
-    pub async fn new(chain_id: ChainId, indexed_type: IndexedType, filter: Option<Filter>) -> Indexer {
+    pub async fn new(chain_id: ChainId, indexed_type: IndexedType, filter: Option<Filter>) -> Self {
         let config = CHAINS_CONFIG.get(&chain_id).unwrap();
         let https = config
             .https
@@ -57,20 +69,25 @@ impl Indexer {
         let db = Arc::new(Mutex::new(
             TransactionDB::open(&opts, &txn_opts, DEFAULT_DB_PATH).unwrap(),
         ));
+        let filter = if filter.is_some() {
+            filter.unwrap()
+        } else {
+            Filter::default()
+        };
         Indexer {
             chain_id,
             indexed_type,
             wss,
             https,
             db,
-            filter
+            filter,
         }
     }
     pub async fn get_indexed_block(&self, indexed_type: IndexedType) -> (u64, i64) {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         let db = DB::open(&opts, DEFAULT_DB_PATH).unwrap();
-        let indexed_key = format!("indexed#{}", self.chain_id);
+        let indexed_key = self.key_indexed_record();
         let indexed_value = db.get(indexed_key.as_bytes());
         if let Err(_) = indexed_value {
             error!(
@@ -82,9 +99,23 @@ impl Indexer {
         let indexed_value = indexed_value.unwrap();
         let indexed_record: IndexedRecord;
         if let None = indexed_value {
+            let indexed_block = if self.filter.start_block.is_some() {
+                self.filter.start_block.unwrap()
+            } else {
+                self.https
+                    .random()
+                    .unwrap()
+                    .get_block(BlockNumber::Latest)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .number
+                    .unwrap()
+                    .as_u64()
+            };
             indexed_record = IndexedRecord {
                 chain_id: self.chain_id,
-                indexed_block: DEFAULT_START_BLOCK.to_owned(),
+                indexed_block,
                 indexed_txi: DEFAULT_START_TXI,
             };
             let indexed_value = serde_json::to_string(&indexed_record).unwrap();
