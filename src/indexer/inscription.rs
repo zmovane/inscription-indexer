@@ -8,7 +8,7 @@ use ethers::{
     providers::{Middleware, StreamExt},
     types::{Block, BlockNumber, Transaction, H256},
 };
-use log::info;
+use log::{info, warn};
 
 impl Indexer {
     pub async fn index_inscriptions(&self) -> Result<(), anyhow::Error> {
@@ -27,7 +27,7 @@ impl Indexer {
             txn.commit().unwrap();
             (block + 1, -1)
         };
-        while block_stream.next().await.is_some() {
+        'stop_indexing: while block_stream.next().await.is_some() {
             let block = self
                 .https
                 .random()
@@ -36,7 +36,16 @@ impl Indexer {
                 .await?
                 .unwrap();
             let block_number = block.number.unwrap();
-            if block_to_process <= block_number.as_u64() {
+            while block_to_process <= block_number.as_u64() {
+                if self.filter.end_block.is_some()
+                    && block_to_process > self.filter.end_block.unwrap()
+                {
+                    warn!(
+                        "Indexing was ended of block {}",
+                        self.filter.end_block.unwrap()
+                    );
+                    break 'stop_indexing;
+                }
                 info!("Process block {}", block_to_process);
                 let txs = self
                     .https
@@ -61,15 +70,7 @@ impl Indexer {
                     }
                     block_txi = txi.unwrap();
                 }
-            }
-            (block_to_process, block_txi) = next_block(block_to_process, block_txi).await;
-            if self.filter.end_block.is_some() && block_to_process > self.filter.end_block.unwrap()
-            {
-                info!(
-                    "Indexing was ended of block {}",
-                    self.filter.end_block.unwrap()
-                );
-                break;
+                (block_to_process, block_txi) = next_block(block_to_process, block_txi).await;
             }
         }
         Ok(())
