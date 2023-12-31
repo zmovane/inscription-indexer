@@ -1,6 +1,7 @@
 use super::keys::Keys;
 use super::{DBInscription, IndexedRecord, Inscription};
 use super::{Indexer, Tick};
+use crate::utils::remove_leadering_zeros;
 use anyhow::Ok;
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
@@ -67,7 +68,7 @@ impl Persistable for Indexer {
             lim: inp.lim.to_owned(),
             amt: inp.amt.to_owned(),
             minted: String::from("0"),
-            deployer: tx.from.encode_hex(),
+            deployer: remove_leadering_zeros(tx.from.encode_hex()),
         };
         let tick_value = serde_json::to_string(&tick).unwrap();
         txn.put(tick_key.as_bytes(), tick_value.as_bytes())?;
@@ -135,7 +136,7 @@ impl Persistable for Indexer {
             max: inp.max.to_owned(),
             lim: inp.lim.to_owned(),
             amt: inp.amt.to_owned(),
-            owner: tx.from.encode_hex(),
+            owner: remove_leadering_zeros(tx.from.encode_hex()),
         };
         let insc_key = self.key_tick_minted(
             &inp.p,
