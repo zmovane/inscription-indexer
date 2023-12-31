@@ -29,7 +29,7 @@ async fn main() {
         }),
     )
     .await;
-    if let Err(e) = indexer.index_inscriptions().await {
+    while let Err(e) = indexer.index_inscriptions().await {
         error!("Error: {}", e);
     }
 }

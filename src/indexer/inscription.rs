@@ -91,7 +91,11 @@ impl Indexer {
         if self.filter.recipient.is_some() && tx.to.unwrap().ne(&self.filter.recipient.unwrap()) {
             return Ok(tx_without_valid_inscription);
         }
-        let input = String::from_utf8(tx.input.to_vec())?;
+        let input = String::from_utf8(tx.input.to_vec());
+        if input.is_err() {
+            return Ok(tx_without_valid_inscription);
+        }
+        let input = input.unwrap();
         if !input.starts_with(PREFIX_INSCRIPTION) {
             return Ok(tx_without_valid_inscription);
         }
