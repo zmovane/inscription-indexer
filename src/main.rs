@@ -1,5 +1,6 @@
 pub mod config;
 pub mod indexer;
+pub mod utils;
 
 use config::ChainId;
 use indexer::{Filter, IndexedType, Indexer};
@@ -16,19 +17,7 @@ async fn main() {
         .expect("CHAIN_ID must be set")
         .parse::<ChainId>()
         .unwrap();
-    let indexer = Indexer::new(
-        chain_id,
-        IndexedType::TextPlain,
-        Some(Filter {
-            is_self_transaction: true,
-            recipient: None,
-            start_block: None,
-            end_block: None,
-            p: None,
-            tick: None,
-        }),
-    )
-    .await;
+    let indexer = Indexer::new(chain_id, IndexedType::TextPlain, Some(Filter::default())).await;
     loop {
         match indexer.index_inscriptions().await {
             Err(e) => error!("Error: {}", e),

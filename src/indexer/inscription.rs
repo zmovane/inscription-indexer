@@ -81,42 +81,42 @@ impl Indexer {
         block: &Block<H256>,
         tx: &Transaction,
     ) -> Result<(bool, Option<i64>), anyhow::Error> {
-        let tx_without_valid_inscription = (false, None);
+        let invalid_inscription_tx = (false, None);
         if tx.to.is_none() {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         if self.filter.is_self_transaction && tx.to.unwrap().ne(&tx.from) {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         if self.filter.recipient.is_some() && tx.to.unwrap().ne(&self.filter.recipient.unwrap()) {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let input = String::from_utf8(tx.input.to_vec());
         if input.is_err() {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let input = input.unwrap();
         if !input.starts_with(PREFIX_INSCRIPTION) {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let data = input.strip_prefix(PREFIX_INSCRIPTION).unwrap_or("{}");
         let deserialized = serde_json::from_str::<serde_json::Value>(data);
         if deserialized.is_err() {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let deserialized = deserialized.unwrap();
         if !deserialized.is_object() {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         if !deserialized.is_valid_inscription() {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let inscription: Inscription = serde_json::from_value(deserialized)?;
         if self.filter.p.is_some() && self.filter.p.as_ref().unwrap().ne(&inscription.p) {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         if self.filter.tick.is_some() && self.filter.tick.as_ref().unwrap().ne(&inscription.tick) {
-            return Ok(tx_without_valid_inscription);
+            return Ok(invalid_inscription_tx);
         }
         let (_, indexed_txi) = self.process_inscription(block, tx, &inscription).await?;
         Ok((true, Some(indexed_txi)))
