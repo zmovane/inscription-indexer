@@ -3,6 +3,9 @@ WORKDIR /app
 
 FROM chef as planner
 COPY . .
+
+RUN apt-get update -y \
+    && apt-get install libclang-dev -y
 # Compute a lock-like file for our project
 RUN cargo chef prepare  --recipe-path recipe.json
 
