@@ -3,7 +3,7 @@ pub mod indexer;
 
 use config::ChainId;
 use indexer::{Filter, IndexedType, Indexer};
-use log::error;
+use log::{error, info};
 
 #[macro_use]
 extern crate lazy_static;
@@ -29,7 +29,10 @@ async fn main() {
         }),
     )
     .await;
-    while let Err(e) = indexer.index_inscriptions().await {
-        error!("Error: {}", e);
+    loop {
+        match indexer.index_inscriptions().await {
+            Err(e) => error!("Error: {}", e),
+            Ok(_) => info!("Pending new block"),
+        }
     }
 }
