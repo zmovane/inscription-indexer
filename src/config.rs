@@ -1,9 +1,6 @@
-use crate::prisma;
-use anyhow::anyhow;
 use ethers::{
     core::rand::{seq::SliceRandom, thread_rng},
     providers::{Http, Provider, Ws},
-    types::U256,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::HashMap, fs, sync::Arc};
@@ -38,27 +35,5 @@ pub trait Random<T> {
 impl Random<HttpProvider> for HttpProviders {
     fn random(&self) -> Result<HttpProvider, anyhow::Error> {
         Ok(self.choose(&mut thread_rng()).unwrap().to_owned())
-    }
-}
-
-pub trait IdToChain {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error>;
-}
-
-impl IdToChain for U256 {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error> {
-        self.as_u64().as_chain()
-    }
-}
-
-impl IdToChain for ChainId {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error> {
-        let chain = match self {
-            1 => prisma::Chain::EthereumMainnet,
-            56 => prisma::Chain::BnbchainMainnet,
-            204 => prisma::Chain::OpbnbMainnet,
-            _ => return Err(anyhow!("Unknown chain")),
-        };
-        Ok(chain)
     }
 }

@@ -1,6 +1,5 @@
 pub mod config;
 pub mod indexer;
-pub mod prisma;
 
 use config::ChainId;
 use indexer::{Filter, IndexedType, Indexer};
