@@ -2,3 +2,4 @@ target
 .env
 src/prisma.rs
 database
+nohup.out
