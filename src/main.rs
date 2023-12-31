@@ -22,7 +22,7 @@ async fn main() {
         Some(Filter {
             is_self_transaction: true,
             recipient: None,
-            start_block: Some(36423029),
+            start_block: None,
             end_block: None,
             p: None,
             tick: None,

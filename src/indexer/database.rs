@@ -1,7 +1,6 @@
 use super::keys::Keys;
 use super::{DBInscription, IndexedRecord, Inscription};
 use super::{Indexer, Tick};
-use anyhow::anyhow;
 use anyhow::Ok;
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
@@ -17,13 +16,13 @@ pub trait Persistable {
         block: &Block<H256>,
         tx: &Transaction,
         inp: &Inscription,
-    ) -> Result<Tick, anyhow::Error>;
+    ) -> Result<(), anyhow::Error>;
     async fn persist_mint(
         &self,
         block: &Block<H256>,
         tx: &Transaction,
         inp: &Inscription,
-    ) -> Result<Tick, anyhow::Error>;
+    ) -> Result<(), anyhow::Error>;
     fn persist_block(
         &self,
         txn: &rocksdb::Transaction<TransactionDB>,
@@ -39,7 +38,7 @@ impl Persistable for Indexer {
         _: &Block<H256>,
         tx: &Transaction,
         inp: &Inscription,
-    ) -> Result<Tick, anyhow::Error> {
+    ) -> Result<(), anyhow::Error> {
         let db = self.db.lock().await;
         let chain_id = tx.chain_id.unwrap().as_u64();
         let start_block = tx.block_number.unwrap().as_u64();
@@ -51,8 +50,7 @@ impl Persistable for Indexer {
         let bs = db.get(tick_key.as_bytes())?;
         if let Some(_) = bs {
             warn!("The tick has been deployed, just skip it!");
-            let tick: Tick = serde_json::from_slice(&bs.unwrap()).unwrap();
-            return Ok(tick);
+            return Ok(());
         }
         let txn = db.transaction();
 
@@ -82,7 +80,7 @@ impl Persistable for Indexer {
         )?;
 
         txn.commit()?;
-        Ok(tick)
+        Ok(())
     }
 
     async fn persist_mint(
@@ -90,7 +88,7 @@ impl Persistable for Indexer {
         block: &Block<H256>,
         tx: &Transaction,
         inp: &Inscription,
-    ) -> Result<Tick, anyhow::Error> {
+    ) -> Result<(), anyhow::Error> {
         let db = self.db.lock().await;
         let chain_id = tx.chain_id.unwrap().as_u64();
         let blockno = tx.block_number.unwrap().as_u64();
@@ -103,7 +101,8 @@ impl Persistable for Indexer {
         let tick_key = self.key_tick_deployed(&inp.p, &inp.tick);
         let bs = db.get(tick_key.as_bytes())?;
         if let None = bs {
-            return Err(anyhow!("Not found deployed tick"));
+            warn!("Not found for deployed tick, just skip it!");
+            return Ok(());
         }
         let txn = db.transaction();
 
@@ -115,7 +114,8 @@ impl Persistable for Indexer {
         let minted = tick.minted.parse::<BigDecimal>().unwrap();
         let updated_minted = minted + amt;
         if updated_minted.gt(&max) {
-            return Err(anyhow!("Max supply is reached"));
+            warn!("Max supply is reached, just ignore it!");
+            return Ok(());
         }
         tick.minted = updated_minted.to_string();
         if updated_minted.eq(&max) {
@@ -149,7 +149,7 @@ impl Persistable for Indexer {
         // index block & txi
         self.persist_block(&txn, blockno, tx.transaction_index.unwrap().as_u64() as i64)?;
         txn.commit()?;
-        Ok(tick)
+        Ok(())
     }
 
     fn persist_block(
