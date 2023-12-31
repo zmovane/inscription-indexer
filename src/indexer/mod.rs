@@ -2,6 +2,7 @@ pub mod database;
 pub mod inscription;
 pub mod keys;
 
+use self::keys::Keys;
 use crate::config::{ChainId, WsProvider, CHAINS_CONFIG};
 use crate::config::{HttpProviders, Random};
 use ethers::providers::{Http, Middleware, Provider, Ws};
@@ -12,12 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::{process, sync::Arc};
 use tokio::sync::Mutex;
 
-use self::keys::Keys;
-
 pub const OP_MINT: &'static str = "mint";
 pub const OP_DEPLOY: &'static str = "deploy";
 pub const PREFIX_INSCRIPTION: &'static str = "data:,";
-pub const PREFIX_INSCRIPTION_HEX: &'static str = "0x646174613a2c";
 pub const DEFAULT_DB_PATH: &'static str = "./data";
 pub const DEFAULT_START_TXI: i64 = -1;
 
