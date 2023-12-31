@@ -3,8 +3,8 @@ pub mod indexer;
 pub mod prisma;
 
 use config::ChainId;
-use indexer::{IndexedType, Indexer};
-use tokio::join;
+use indexer::{Filter, IndexedType, Indexer};
+use log::error;
 
 #[macro_use]
 extern crate lazy_static;
@@ -17,6 +17,20 @@ async fn main() {
         .expect("CHAIN_ID must be set")
         .parse::<ChainId>()
         .unwrap();
-    let indexer = Indexer::new(chain_id, IndexedType::TextPlain, None).await;
-    let _ = join!(indexer.index_inscriptions());
+    let indexer = Indexer::new(
+        chain_id,
+        IndexedType::TextPlain,
+        Some(Filter {
+            is_self_transaction: true,
+            recipient: None,
+            start_block: Some(36423029),
+            end_block: None,
+            p: None,
+            tick: None,
+        }),
+    )
+    .await;
+    if let Err(e) = indexer.index_inscriptions().await {
+        error!("Error: {}", e);
+    }
 }

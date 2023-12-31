@@ -22,12 +22,12 @@ pub const DEFAULT_DB_PATH: &'static str = "./database";
 pub const DEFAULT_START_TXI: i64 = -1;
 
 pub struct Filter {
-    is_self_transaction: bool,
-    recipient: Option<H160>,
-    start_block: Option<u64>,
-    end_block: Option<u64>,
-    p: Option<String>,
-    tick: Option<String>,
+    pub is_self_transaction: bool,
+    pub recipient: Option<H160>,
+    pub start_block: Option<u64>,
+    pub end_block: Option<u64>,
+    pub p: Option<String>,
+    pub tick: Option<String>,
 }
 
 impl Filter {
@@ -66,8 +66,9 @@ impl Indexer {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         let txn_opts = TransactionDBOptions::default();
+        let cfs: Vec<String> = DB::list_cf::<&str>(&opts, DEFAULT_DB_PATH).unwrap_or(vec![]);
         let db = Arc::new(Mutex::new(
-            TransactionDB::open(&opts, &txn_opts, DEFAULT_DB_PATH).unwrap(),
+            TransactionDB::open_cf(&opts, &txn_opts, DEFAULT_DB_PATH, cfs).unwrap(),
         ));
         let filter = if filter.is_some() {
             filter.unwrap()
@@ -86,9 +87,8 @@ impl Indexer {
     pub async fn get_indexed_block(&self, indexed_type: IndexedType) -> (u64, i64) {
         let mut opts = Options::default();
         opts.create_if_missing(true);
-        let db = DB::open(&opts, DEFAULT_DB_PATH).unwrap();
         let indexed_key = self.key_indexed_record();
-        let indexed_value = db.get(indexed_key.as_bytes());
+        let indexed_value = self.db.lock().await.get(indexed_key.as_bytes());
         if let Err(_) = indexed_value {
             error!(
                 "Indexed block not found for {:?} {:?}",
@@ -119,7 +119,11 @@ impl Indexer {
                 indexed_txi: DEFAULT_START_TXI,
             };
             let indexed_value = serde_json::to_string(&indexed_record).unwrap();
-            let _ = db.put(indexed_key.as_bytes(), indexed_value.as_bytes());
+            let _ = self
+                .db
+                .lock()
+                .await
+                .put(indexed_key.as_bytes(), indexed_value.as_bytes());
         } else {
             let indexed_value = indexed_value.unwrap();
             indexed_record = serde_json::from_slice(&indexed_value).unwrap();
@@ -143,6 +147,16 @@ pub struct IndexedRecord {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Inscription {
+    pub p: String,
+    pub op: String,
+    pub tick: String,
+    pub max: Option<String>,
+    pub lim: Option<String>,
+    pub amt: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DBInscription {
     pub id: String,
     pub chain_id: u64,
     pub p: String,

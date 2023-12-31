@@ -15,3 +15,8 @@
   https:
     - "https://opbnb.publicnode.com"
     - "https://1rpc.io/opbnb"
+97:
+  name: BNBTestnet
+  wss: "wss://bsc-testnet.publicnode.com"
+  https:
+    - "https://bsc-testnet.publicnode.com"
