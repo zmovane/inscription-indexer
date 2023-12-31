@@ -18,8 +18,13 @@ pub const OP_MINT: &'static str = "mint";
 pub const OP_DEPLOY: &'static str = "deploy";
 pub const PREFIX_INSCRIPTION: &'static str = "data:,";
 pub const PREFIX_INSCRIPTION_HEX: &'static str = "0x646174613a2c";
-pub const DEFAULT_DB_PATH: &'static str = "./database";
+pub const DEFAULT_DB_PATH: &'static str = "./data";
 pub const DEFAULT_START_TXI: i64 = -1;
+
+lazy_static! {
+    pub static ref DB_PATH: String =
+        std::env::var("DB_PATH").unwrap_or(DEFAULT_DB_PATH.to_string());
+}
 
 pub struct Filter {
     pub is_self_transaction: bool,
@@ -66,9 +71,9 @@ impl Indexer {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         let txn_opts = TransactionDBOptions::default();
-        let cfs: Vec<String> = DB::list_cf::<&str>(&opts, DEFAULT_DB_PATH).unwrap_or(vec![]);
+        let cfs: Vec<String> = DB::list_cf::<&str>(&opts, DB_PATH.as_str()).unwrap_or(vec![]);
         let db = Arc::new(Mutex::new(
-            TransactionDB::open_cf(&opts, &txn_opts, DEFAULT_DB_PATH, cfs).unwrap(),
+            TransactionDB::open_cf(&opts, &txn_opts, DB_PATH.as_str(), cfs).unwrap(),
         ));
         let filter = if filter.is_some() {
             filter.unwrap()

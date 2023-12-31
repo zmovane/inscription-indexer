@@ -1,5 +1,5 @@
 target
 .env
 src/prisma.rs
-database
+data
 nohup.out
