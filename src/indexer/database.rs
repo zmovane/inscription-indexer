@@ -4,7 +4,7 @@ use super::{Indexer, Tick};
 use crate::utils::remove_leadering_zeros;
 use anyhow::Ok;
 use async_trait::async_trait;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use ethers::types::{Block, H256};
 use ethers::{abi::AbiEncode, types::Transaction};
 use log::warn;
@@ -54,7 +54,22 @@ impl Persistable for Indexer {
             return Ok(());
         }
         let txn = db.transaction();
-
+        let max = inp
+            .max
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        let lim = inp
+            .lim
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        if max.le(&BigDecimal::zero()) || lim.le(&BigDecimal::zero()) {
+            warn!("Invalid deploy cause of 'max' or 'lim' lower than or equals to zero , just ignore it!");
+            return Ok(());
+        }
         // deploy
         let tick = Tick {
             id,
@@ -66,7 +81,6 @@ impl Persistable for Indexer {
             tick: inp.tick.to_owned(),
             max: inp.max.to_owned(),
             lim: inp.lim.to_owned(),
-            amt: inp.amt.to_owned(),
             minted: String::from("0"),
             deployer: remove_leadering_zeros(tx.from.encode_hex()),
         };
@@ -110,7 +124,22 @@ impl Persistable for Indexer {
         // update tick
         let bs = txn.get(tick_key.as_bytes())?;
         let mut tick: Tick = serde_json::from_slice(&bs.unwrap()).unwrap();
-        let amt = inp.amt.as_ref().unwrap().parse::<BigDecimal>().unwrap();
+        let amt = inp
+            .amt
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        let lim = tick
+            .lim
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        if amt.le(&BigDecimal::zero()) || amt.gt(&lim) {
+            warn!("Invalid mint cause of 'amt' isn't in range from 1 to 'lim', just ignore it!");
+            return Ok(());
+        }
         let max = tick.max.as_ref().unwrap().parse::<BigDecimal>().unwrap();
         let minted = tick.minted.parse::<BigDecimal>().unwrap();
         let updated_minted = minted + amt;

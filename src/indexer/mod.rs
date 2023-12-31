@@ -180,7 +180,6 @@ pub struct Tick {
     pub tick: String,
     pub max: Option<String>,
     pub lim: Option<String>,
-    pub amt: Option<String>,
     pub start_block: u64,
     pub end_block: Option<u64>,
     pub minted: String,
