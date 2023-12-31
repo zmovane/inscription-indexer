@@ -22,12 +22,9 @@ impl Keys for Indexer {
         format!("indexed#{}#{}#{}", self.chain_id, p, tick)
     }
     fn key_tick_minted(&self, p: &str, tick: &str, hash: &str, ts: u64) -> String {
-        format!(
-            "inscriptions#{}#{}#{}#{}#{}",
-            self.chain_id, p, tick, hash, ts
-        )
+        format!("mint#{}#{}#{}#{}#{}", self.chain_id, p, tick, hash, ts)
     }
     fn key_tick_deployed(&self, p: &str, tick: &str) -> String {
-        format!("tick#{}#{}#{}", self.chain_id, p, tick)
+        format!("deploy#{}#{}#{}", self.chain_id, p, tick)
     }
 }
