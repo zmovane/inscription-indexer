@@ -19,7 +19,8 @@ impl Indexer {
         {
             block_to_process = self.filter.start_block.unwrap();
         }
-        let mut block_stream = self.wss.watch_blocks().await?;
+        let provider = self.https.random().unwrap();
+        let mut block_stream = provider.watch_blocks().await?;
         let next_block = |block, _| (block + 1, -1);
         'stop_indexing: while block_stream.next().await.is_some() {
             let block = self

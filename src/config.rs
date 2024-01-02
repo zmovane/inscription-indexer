@@ -1,6 +1,6 @@
 use ethers::{
     core::rand::{seq::SliceRandom, thread_rng},
-    providers::{Http, Provider, Ws},
+    providers::{Http, Provider, RetryClient},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::HashMap, fs, sync::Arc};
@@ -11,8 +11,7 @@ lazy_static! {
 }
 
 pub type ChainId = u64;
-pub type WsProvider = Arc<Provider<Ws>>;
-pub type HttpProvider = Arc<Provider<Http>>;
+pub type HttpProvider = Arc<Provider<RetryClient<Http>>>;
 pub type HttpProviders = Vec<HttpProvider>;
 
 pub fn read_yaml<T: DeserializeOwned>(path: &str) -> Result<T, serde_yaml::Error> {

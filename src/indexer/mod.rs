@@ -3,9 +3,9 @@ pub mod inscription;
 pub mod keys;
 
 use self::keys::Keys;
-use crate::config::{ChainId, WsProvider, CHAINS_CONFIG};
+use crate::config::{ChainId, CHAINS_CONFIG};
 use crate::config::{HttpProviders, Random};
-use ethers::providers::{Http, Middleware, Provider, Ws};
+use ethers::providers::{Middleware, Provider};
 use ethers::types::{BlockNumber, H160};
 use log::error;
 use rocksdb::{Options, TransactionDB, TransactionDBOptions, DB};
@@ -49,7 +49,6 @@ impl Filter {
 pub struct Indexer {
     chain_id: ChainId,
     indexed_type: IndexedType,
-    wss: WsProvider,
     https: HttpProviders,
     db: Arc<Mutex<TransactionDB>>,
     filter: Filter,
@@ -61,11 +60,8 @@ impl Indexer {
         let https = config
             .https
             .iter()
-            .map(|x| Arc::new(Provider::<Http>::try_from(x).unwrap()))
+            .map(|x| Arc::new(Provider::new_client(x, 5, 10).unwrap()))
             .collect();
-        let wss = Arc::new(Provider::<Ws>::new(
-            Ws::connect(config.wss.as_str()).await.unwrap(),
-        ));
         let mut opts = Options::default();
         opts.create_if_missing(true);
         let txn_opts = TransactionDBOptions::default();
@@ -81,7 +77,6 @@ impl Indexer {
         Indexer {
             chain_id,
             indexed_type,
-            wss,
             https,
             db,
             filter,
