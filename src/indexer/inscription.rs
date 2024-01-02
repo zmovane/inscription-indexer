@@ -20,13 +20,7 @@ impl Indexer {
             block_to_process = self.filter.start_block.unwrap();
         }
         let mut block_stream = self.wss.watch_blocks().await?;
-        let next_block = move |block, txi| async move {
-            let db = self.db.lock().await;
-            let txn = db.transaction();
-            self.persist_block(&txn, block, txi).unwrap();
-            txn.commit().unwrap();
-            (block + 1, -1)
-        };
+        let next_block = |block, _| (block + 1, -1);
         'stop_indexing: while block_stream.next().await.is_some() {
             let block = self
                 .https
@@ -54,7 +48,8 @@ impl Indexer {
                     .get_block_with_txs(block_to_process)
                     .await?;
                 if let None = txs {
-                    (block_to_process, block_txi) = next_block(block_to_process, block_txi).await;
+                    self.mark_block_and_txi(block_to_process, block_txi).await?;
+                    (block_to_process, block_txi) = next_block(block_to_process, block_txi);
                     continue;
                 }
                 let mut txs = txs.unwrap().transactions;
@@ -70,7 +65,8 @@ impl Indexer {
                     }
                     block_txi = txi.unwrap();
                 }
-                (block_to_process, block_txi) = next_block(block_to_process, block_txi).await;
+                self.mark_block_and_txi(block_to_process, block_txi).await?;
+                (block_to_process, block_txi) = next_block(block_to_process, block_txi);
             }
         }
         Ok(())
@@ -137,5 +133,17 @@ impl Indexer {
         let indexed_block = tx.block_number.unwrap().as_u64() as u64;
         let indexed_txi = tx.transaction_index.unwrap().as_u64() as i64;
         Ok((indexed_block, indexed_txi))
+    }
+
+    async fn mark_block_and_txi(
+        &self,
+        block_to_process: u64,
+        block_txi: i64,
+    ) -> Result<(), anyhow::Error> {
+        let db = self.db.lock().await;
+        let txn = db.transaction();
+        self.persist_block(&txn, block_to_process, block_txi)?;
+        txn.commit()?;
+        Ok(())
     }
 }
