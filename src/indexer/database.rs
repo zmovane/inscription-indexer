@@ -9,7 +9,7 @@ use bigdecimal::{BigDecimal, Zero};
 use ethers::types::{Block, H256};
 use ethers::{abi::AbiEncode, types::Transaction};
 use log::warn;
-use rocksdb::{Options, TransactionDB};
+use rocksdb::TransactionDB;
 
 #[async_trait]
 pub trait Persistable {
@@ -46,9 +46,6 @@ impl Persistable for Indexer {
         let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
         let start_block = tx.block_number.unwrap().as_u64();
         let id: String = tx.hash.encode_hex();
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.create_missing_column_families(true);
         let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
         let bs = db.get(tick_key.as_bytes())?;
         if let Some(_) = bs {
@@ -115,11 +112,6 @@ impl Persistable for Indexer {
         let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
         let blockno = tx.block_number.unwrap().as_u64();
         let id: String = tx.hash.encode_hex();
-
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.create_missing_column_families(true);
-
         let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
         let bs = db.get(tick_key.as_bytes())?;
         if let None = bs {
