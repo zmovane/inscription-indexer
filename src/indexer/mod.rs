@@ -83,8 +83,6 @@ impl Indexer {
         }
     }
     pub async fn get_indexed_block(&self, indexed_type: IndexedType) -> (u64, i64) {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
         let indexed_key = self.key_indexed_record();
         let indexed_value = self.db.lock().await.get(indexed_key.as_bytes());
         if let Err(_) = indexed_value {
@@ -95,37 +93,35 @@ impl Indexer {
             process::exit(1);
         }
         let indexed_value = indexed_value.unwrap();
-        let indexed_record: IndexedRecord;
-        if let None = indexed_value {
-            let indexed_block = if self.filter.start_block.is_some() {
-                self.filter.start_block.unwrap()
-            } else {
-                self.https
-                    .random()
-                    .unwrap()
-                    .get_block(BlockNumber::Latest)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .number
-                    .unwrap()
-                    .as_u64()
-            };
-            indexed_record = IndexedRecord {
-                chain_id: self.chain_id,
-                indexed_block,
-                indexed_txi: DEFAULT_START_TXI,
-            };
-            let indexed_value = serde_json::to_string(&indexed_record).unwrap();
-            let _ = self
-                .db
-                .lock()
-                .await
-                .put(indexed_key.as_bytes(), indexed_value.as_bytes());
-        } else {
-            let indexed_value = indexed_value.unwrap();
-            indexed_record = serde_json::from_slice(&indexed_value).unwrap();
+        if let Some(indexed_value) = indexed_value {
+            let indexed_record: IndexedRecord = serde_json::from_slice(&indexed_value).unwrap();
+            return (indexed_record.indexed_block, indexed_record.indexed_txi);
         }
+        let indexed_block = if self.filter.start_block.is_some() {
+            self.filter.start_block.unwrap()
+        } else {
+            self.https
+                .random()
+                .unwrap()
+                .get_block(BlockNumber::Latest)
+                .await
+                .unwrap()
+                .unwrap()
+                .number
+                .unwrap()
+                .as_u64()
+        };
+        let indexed_record = IndexedRecord {
+            chain_id: self.chain_id,
+            indexed_block,
+            indexed_txi: DEFAULT_START_TXI,
+        };
+        let indexed_value = serde_json::to_string(&indexed_record).unwrap();
+        let _ = self
+            .db
+            .lock()
+            .await
+            .put(indexed_key.as_bytes(), indexed_value.as_bytes());
         (indexed_record.indexed_block, indexed_record.indexed_txi)
     }
 }
