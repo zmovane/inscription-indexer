@@ -32,8 +32,12 @@ async fn main() {
     let indexer = Indexer::new(chain_id, IndexedType::TextPlain, filter).await;
     loop {
         match indexer.index_inscriptions().await {
-            Err(e) => error!("Error: {}", e),
-            Ok(_) => info!("Pending new block"),
+            Err(e) => {
+                error!("Error: {}", e)
+            }
+            Ok(_) => {
+                info!("Pending new block")
+            }
         }
     }
 }
