@@ -157,6 +157,7 @@ pub struct Inscription {
 pub struct DBInscription {
     pub id: String,
     pub chain_id: u64,
+    pub chain: String,
     pub p: String,
     pub op: String,
     pub tick: String,
@@ -165,11 +166,13 @@ pub struct DBInscription {
     pub amt: Option<String>,
     pub block: u64,
     pub owner: String,
+    pub timestamp: u64,
 }
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Tick {
     pub id: String,
     pub chain_id: u64,
+    pub chain: String,
     pub p: String,
     pub op: String,
     pub tick: String,
@@ -178,6 +181,9 @@ pub struct Tick {
     pub start_block: u64,
     pub end_block: Option<u64>,
     pub minted: String,
+    pub mintable: bool,
+    pub holders: String,
+    pub timestamp: u64,
     pub deployer: String,
 }
 trait InscriptionFieldValidate {

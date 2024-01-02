@@ -1,6 +1,7 @@
 use super::keys::Keys;
 use super::{DBInscription, IndexedRecord, Inscription};
 use super::{Indexer, Tick};
+use crate::config::CHAINS_CONFIG;
 use crate::utils::remove_leadering_zeros;
 use anyhow::Ok;
 use async_trait::async_trait;
@@ -36,18 +37,19 @@ pub trait Persistable {
 impl Persistable for Indexer {
     async fn persist_deploy(
         &self,
-        _: &Block<H256>,
+        block: &Block<H256>,
         tx: &Transaction,
         inp: &Inscription,
     ) -> Result<(), anyhow::Error> {
         let db = self.db.lock().await;
         let chain_id = tx.chain_id.unwrap().as_u64();
+        let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
         let start_block = tx.block_number.unwrap().as_u64();
         let id: String = tx.hash.encode_hex();
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
-        let tick_key = self.key_tick_deployed(&inp.p, &inp.tick);
+        let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
         let bs = db.get(tick_key.as_bytes())?;
         if let Some(_) = bs {
             warn!("The tick has been deployed, just skip it!");
@@ -74,6 +76,8 @@ impl Persistable for Indexer {
         let tick = Tick {
             id,
             chain_id,
+            chain,
+            mintable: true,
             start_block,
             end_block: None,
             p: inp.p.to_owned(),
@@ -81,8 +85,10 @@ impl Persistable for Indexer {
             tick: inp.tick.to_owned(),
             max: inp.max.to_owned(),
             lim: inp.lim.to_owned(),
-            minted: String::from("0"),
+            minted: "0".to_string(),
+            holders: "0".to_string(),
             deployer: remove_leadering_zeros(tx.from.encode_hex()),
+            timestamp: block.timestamp.as_u64(),
         };
         let tick_value = serde_json::to_string(&tick).unwrap();
         txn.put(tick_key.as_bytes(), tick_value.as_bytes())?;
@@ -106,6 +112,7 @@ impl Persistable for Indexer {
     ) -> Result<(), anyhow::Error> {
         let db = self.db.lock().await;
         let chain_id = tx.chain_id.unwrap().as_u64();
+        let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
         let blockno = tx.block_number.unwrap().as_u64();
         let id: String = tx.hash.encode_hex();
 
@@ -113,7 +120,7 @@ impl Persistable for Indexer {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        let tick_key = self.key_tick_deployed(&inp.p, &inp.tick);
+        let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
         let bs = db.get(tick_key.as_bytes())?;
         if let None = bs {
             warn!("Not found for deployed tick, just skip it!");
@@ -150,13 +157,16 @@ impl Persistable for Indexer {
         tick.minted = updated_minted.to_string();
         if updated_minted.eq(&max) {
             tick.end_block = Some(tx.block_number.unwrap().as_u64());
+            tick.mintable = false;
         }
         let tick_value = serde_json::to_string(&tick).unwrap();
         txn.put(tick_key.as_bytes(), tick_value.as_bytes())?;
 
         // insert mint
+        let owner = remove_leadering_zeros(tx.from.encode_hex());
         let insc = DBInscription {
             id,
+            chain,
             chain_id,
             block: blockno,
             p: inp.p.to_owned(),
@@ -165,11 +175,13 @@ impl Persistable for Indexer {
             max: inp.max.to_owned(),
             lim: inp.lim.to_owned(),
             amt: inp.amt.to_owned(),
-            owner: remove_leadering_zeros(tx.from.encode_hex()),
+            owner: owner.to_owned(),
+            timestamp: block.timestamp.as_u64(),
         };
-        let insc_key = self.key_tick_minted(
+        let insc_key = self.key_tick_mint(
             &inp.p,
             &inp.tick,
+            &owner,
             &tx.hash.encode_hex(),
             block.timestamp.as_u64(),
         );
