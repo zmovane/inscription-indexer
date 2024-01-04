@@ -1,126 +1,205 @@
-use super::Inscription;
-use crate::{
-    config::IdToChain,
-    prisma::{self, PrismaClient},
-};
-use anyhow::{anyhow, Ok};
-use ethers::{types::Transaction, utils::hex::ToHex};
-use prisma_client_rust::bigdecimal::BigDecimal;
+use super::keys::Keys;
+use super::{DBInscription, IndexedRecord, Inscription};
+use super::{Indexer, Tick};
+use crate::config::CHAINS_CONFIG;
+use crate::utils::remove_leadering_zeros;
+use anyhow::Ok;
+use async_trait::async_trait;
+use bigdecimal::{BigDecimal, Zero};
+use ethers::types::{Block, H256};
+use ethers::{abi::AbiEncode, types::Transaction};
+use log::warn;
+use rocksdb::TransactionDB;
 
-pub type DBInscription = prisma::tick::Data;
-
-pub async fn update_indexed_block(
-    db: &PrismaClient,
-    chain: &prisma::Chain,
-    indexed_block: i64,
-    indexed_txi: i64,
-) -> Result<(), anyhow::Error> {
-    db.indexed_block()
-        .upsert(
-            prisma::indexed_block::UniqueWhereParam::ChainIndexedTypeEquals(
-                chain.to_owned(),
-                prisma::IndexedType::OrdinalsTextPlain,
-            ),
-            prisma::indexed_block::create(
-                chain.to_owned(),
-                prisma::IndexedType::OrdinalsTextPlain,
-                indexed_block,
-                indexed_txi,
-                vec![],
-            ),
-            vec![],
-        )
-        .exec()
-        .await?;
-    Ok(())
+#[async_trait]
+pub trait Persistable {
+    async fn persist_deploy(
+        &self,
+        block: &Block<H256>,
+        tx: &Transaction,
+        inp: &Inscription,
+    ) -> Result<(), anyhow::Error>;
+    async fn persist_mint(
+        &self,
+        block: &Block<H256>,
+        tx: &Transaction,
+        inp: &Inscription,
+    ) -> Result<(), anyhow::Error>;
+    fn persist_block(
+        &self,
+        txn: &rocksdb::Transaction<TransactionDB>,
+        indexed_block: u64,
+        indexed_txi: i64,
+    ) -> Result<(), anyhow::Error>;
 }
 
-pub async fn dump_deploy_inscription(
-    db: &PrismaClient,
-    tx: &Transaction,
-    inp: &Inscription,
-) -> Result<prisma::tick::Data, anyhow::Error> {
-    let chain = tx.chain_id.unwrap().as_chain()?;
-    let start_block = tx.block_number.unwrap().as_u64() as i64;
-    db.tick()
-        .upsert(
-            prisma::tick::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
-            prisma::tick::create(
-                tx.hash.encode_hex(),
-                chain,
-                start_block,
-                tx.from.encode_hex(),
-                inp.p.to_owned(),
-                inp.tick.to_owned(),
-                inp.max.to_owned().unwrap(),
-                inp.lim.to_owned().unwrap(),
-                vec![],
-            ),
-            vec![prisma::tick::start_block::set(start_block)],
-        )
-        .exec()
-        .await
-        .map_err(|e| anyhow!(e))
-}
-
-pub async fn dump_mint_inscription(
-    db: &PrismaClient,
-    tx: &Transaction,
-    inp: &Inscription,
-) -> Result<DBInscription, anyhow::Error> {
-    let chain = tx.chain_id.unwrap().as_chain()?;
-    let blockno = tx.block_number.unwrap().as_u64() as i64;
-    let inscription = db
-        .tick()
-        .find_unique(prisma::tick::UniqueWhereParam::ChainPTickEquals(
+#[async_trait]
+impl Persistable for Indexer {
+    async fn persist_deploy(
+        &self,
+        block: &Block<H256>,
+        tx: &Transaction,
+        inp: &Inscription,
+    ) -> Result<(), anyhow::Error> {
+        let db = self.db.lock().await;
+        let chain_id = tx.chain_id.unwrap().as_u64();
+        let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
+        let start_block = tx.block_number.unwrap().as_u64();
+        let id: String = tx.hash.encode_hex();
+        let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
+        let bs = db.get(tick_key.as_bytes())?;
+        if let Some(_) = bs {
+            warn!("The tick has been deployed, just skip it!");
+            return Ok(());
+        }
+        let txn = db.transaction();
+        let max = inp
+            .max
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        let lim = inp
+            .lim
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        if max.le(&BigDecimal::zero()) || lim.le(&BigDecimal::zero()) {
+            warn!("Invalid deploy cause of 'max' or 'lim' lower than or equals to zero , just ignore it!");
+            return Ok(());
+        }
+        // deploy
+        let tick = Tick {
+            id,
+            chain_id,
             chain,
-            inp.p.to_owned(),
-            inp.tick.to_owned(),
-        ))
-        .exec()
-        .await?;
-    if let None = inscription {
-        return Err(anyhow!("Not found deployed inscription"));
+            mintable: true,
+            start_block,
+            end_block: None,
+            p: inp.p.to_owned(),
+            op: inp.op.to_owned(),
+            tick: inp.tick.to_owned(),
+            max: inp.max.to_owned(),
+            lim: inp.lim.to_owned(),
+            minted: "0".to_string(),
+            holders: "0".to_string(),
+            deployer: remove_leadering_zeros(tx.from.encode_hex()),
+            timestamp: block.timestamp.as_u64(),
+        };
+        let tick_value = serde_json::to_string(&tick).unwrap();
+        txn.put(tick_key.as_bytes(), tick_value.as_bytes())?;
+
+        // index block
+        self.persist_block(
+            &txn,
+            start_block,
+            tx.transaction_index.unwrap().as_u64() as i64,
+        )?;
+
+        txn.commit()?;
+        Ok(())
     }
-    let inscription = inscription.unwrap();
-    let amt = inp.amt.as_ref().unwrap().parse::<BigDecimal>().unwrap();
-    let max = inscription.max.parse::<BigDecimal>().unwrap();
-    let minted = inscription.minted.parse::<BigDecimal>().unwrap();
-    let updated_minted = minted + amt;
-    if updated_minted.gt(&max) {
-        return Err(anyhow!("Max supply is reached"));
+
+    async fn persist_mint(
+        &self,
+        block: &Block<H256>,
+        tx: &Transaction,
+        inp: &Inscription,
+    ) -> Result<(), anyhow::Error> {
+        let db = self.db.lock().await;
+        let chain_id = tx.chain_id.unwrap().as_u64();
+        let chain = CHAINS_CONFIG.get(&chain_id).unwrap().name.to_owned();
+        let blockno = tx.block_number.unwrap().as_u64();
+        let id: String = tx.hash.encode_hex();
+        let tick_key = self.key_tick_deploy(&inp.p, &inp.tick);
+        let bs = db.get(tick_key.as_bytes())?;
+        if let None = bs {
+            warn!("Not found for deployed tick, just skip it!");
+            return Ok(());
+        }
+        let txn = db.transaction();
+
+        // update tick
+        let bs = txn.get(tick_key.as_bytes())?;
+        let mut tick: Tick = serde_json::from_slice(&bs.unwrap()).unwrap();
+        let amt = inp
+            .amt
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        let lim = tick
+            .lim
+            .as_ref()
+            .unwrap()
+            .parse::<BigDecimal>()
+            .unwrap_or(BigDecimal::zero());
+        if amt.le(&BigDecimal::zero()) || amt.gt(&lim) {
+            warn!("Invalid mint cause of 'amt' isn't in range from 1 to 'lim', just ignore it!");
+            return Ok(());
+        }
+        let max = tick.max.as_ref().unwrap().parse::<BigDecimal>().unwrap();
+        let minted = tick.minted.parse::<BigDecimal>().unwrap();
+        let updated_minted = minted + amt;
+        if updated_minted.gt(&max) {
+            warn!("Max supply is reached, just ignore it!");
+            return Ok(());
+        }
+        tick.minted = updated_minted.to_string();
+        if updated_minted.eq(&max) {
+            tick.end_block = Some(tx.block_number.unwrap().as_u64());
+            tick.mintable = false;
+        }
+        let tick_value = serde_json::to_string(&tick).unwrap();
+        txn.put(tick_key.as_bytes(), tick_value.as_bytes())?;
+
+        // insert mint
+        let owner = remove_leadering_zeros(tx.from.encode_hex());
+        let insc = DBInscription {
+            id,
+            chain,
+            chain_id,
+            block: blockno,
+            p: inp.p.to_owned(),
+            op: inp.op.to_owned(),
+            tick: inp.tick.to_owned(),
+            max: inp.max.to_owned(),
+            lim: inp.lim.to_owned(),
+            amt: inp.amt.to_owned(),
+            owner: owner.to_owned(),
+            timestamp: block.timestamp.as_u64(),
+        };
+        let insc_key = self.key_tick_mint(
+            &inp.p,
+            &inp.tick,
+            &owner,
+            &tx.hash.encode_hex(),
+            block.timestamp.as_u64(),
+        );
+        let insc_value = serde_json::to_string(&insc).unwrap();
+        txn.put(insc_key.as_bytes(), insc_value.as_bytes())?;
+
+        // index block & txi
+        self.persist_block(&txn, blockno, tx.transaction_index.unwrap().as_u64() as i64)?;
+        txn.commit()?;
+        Ok(())
     }
-    let _ = db
-        .inscribe()
-        .upsert(
-            prisma::inscribe::UniqueWhereParam::IdEquals(tx.hash.encode_hex()),
-            prisma::inscribe::create(
-                tx.hash.encode_hex(),
-                prisma::tick::UniqueWhereParam::ChainPTickEquals(
-                    chain,
-                    inp.p.to_owned(),
-                    inp.tick.to_owned(),
-                ),
-                blockno,
-                inp.amt.to_owned().unwrap(),
-                vec![],
-            ),
-            vec![],
-        )
-        .exec()
-        .await
-        .map_err(|e| anyhow!(e))?;
-    let mut updates: Vec<prisma::tick::SetParam> =
-        vec![prisma::tick::minted::set(updated_minted.to_string())];
-    if updated_minted.eq(&max) {
-        updates.push(prisma::tick::end_block::set(Some(blockno)));
+
+    fn persist_block(
+        &self,
+        txn: &rocksdb::Transaction<TransactionDB>,
+        indexed_block: u64,
+        indexed_txi: i64,
+    ) -> Result<(), anyhow::Error> {
+        let indexed_record = IndexedRecord {
+            chain_id: self.chain_id,
+            indexed_block,
+            indexed_txi,
+        };
+        let indexed_key = self.key_indexed_record();
+        let indexed_value = serde_json::to_string(&indexed_record).unwrap();
+        txn.put(indexed_key.as_bytes(), indexed_value.as_bytes())?;
+        Ok(())
     }
-    db.tick()
-        .update(
-            prisma::tick::UniqueWhereParam::IdEquals(inscription.id),
-            updates,
-        )
-        .exec()
-        .await
-        .map_err(|e| anyhow!(e))
 }

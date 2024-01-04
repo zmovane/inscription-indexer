@@ -1,9 +1,6 @@
-use crate::prisma;
-use anyhow::anyhow;
 use ethers::{
     core::rand::{seq::SliceRandom, thread_rng},
-    providers::{Http, Provider, Ws},
-    types::U256,
+    providers::{Http, Provider, RetryClient},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{collections::HashMap, fs, sync::Arc};
@@ -14,9 +11,7 @@ lazy_static! {
 }
 
 pub type ChainId = u64;
-pub type IndexedType = prisma::IndexedType;
-pub type WsProvider = Arc<Provider<Ws>>;
-pub type HttpProvider = Arc<Provider<Http>>;
+pub type HttpProvider = Arc<Provider<RetryClient<Http>>>;
 pub type HttpProviders = Vec<HttpProvider>;
 
 pub fn read_yaml<T: DeserializeOwned>(path: &str) -> Result<T, serde_yaml::Error> {
@@ -39,27 +34,5 @@ pub trait Random<T> {
 impl Random<HttpProvider> for HttpProviders {
     fn random(&self) -> Result<HttpProvider, anyhow::Error> {
         Ok(self.choose(&mut thread_rng()).unwrap().to_owned())
-    }
-}
-
-pub trait IdToChain {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error>;
-}
-
-impl IdToChain for U256 {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error> {
-        self.as_u64().as_chain()
-    }
-}
-
-impl IdToChain for ChainId {
-    fn as_chain(&self) -> Result<prisma::Chain, anyhow::Error> {
-        let chain = match self {
-            1 => prisma::Chain::EthereumMainnet,
-            56 => prisma::Chain::BnbchainMainnet,
-            204 => prisma::Chain::OpbnbMainnet,
-            _ => return Err(anyhow!("Unknown chain")),
-        };
-        Ok(chain)
     }
 }

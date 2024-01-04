@@ -1,8 +1,11 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.68.2 as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.75.0 as chef
 WORKDIR /app
 
 FROM chef as planner
 COPY . .
+
+RUN apt-get update -y \
+    && apt-get install libclang-dev -y
 # Compute a lock-like file for our project
 RUN cargo chef prepare  --recipe-path recipe.json
 
@@ -19,12 +22,12 @@ RUN apt-get update -y \
 RUN cargo build --release --bin inscription
 
 FROM debian:bullseye-slim AS runtime
-ARG CHAIN 
-WORKDIR /app/inscription-$CHAIN
+ARG CHAIN_ID
+WORKDIR /app/insc-indexer-$CHAIN_ID
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/inscription inscription
+COPY --from=builder /app/target/release/inscription insc-indexer-$CHAIN_ID

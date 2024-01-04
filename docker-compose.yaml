@@ -1,15 +1,14 @@
 version: "3.9"
 networks:
-  inscription-net:
+  insc-indexer-net:
     driver: bridge
 services:
-  inscription:
+  insc-indexer-97:
     restart: always
-    working_dir: /app/inscription-${CHAIN}
+    working_dir: /app/insc-indexer-97
     environment:
-      - CHAIN=${CHAIN}
-      - RPC_URL=${RPC_URL}
-    image: inscription-${CHAIN}:v1
-    command: ./inscription-${CHAIN}
+      - CHAIN_ID=${97}
+    image: insc-indexer-97:v1
+    command: ./insc-indexer-97
     networks:
-      - inscription-net
+      - insc-indexer-net
